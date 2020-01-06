@@ -1,0 +1,5 @@
+#!/bin/sh
+
+i3lock -i Pictures/Backgrounds/lock.jpg  -m --clock --composite -t --wrongcolor=ffffffff --datecolor=ffffffff --timecolor=ffffffff
+
+# betterlockscreen --lock -w dimblur -l dimblur

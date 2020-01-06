@@ -1,0 +1,8 @@
+#!/bin/sh
+
+drives=$(lsblk -l -o "KNAME,SIZE,TYPE,MOUNTPOINT" | grep -E "part|rom|lvm" | grep "/" | awk '{print $1, "(" $2 ") " $4}')
+chosen=$(echo "$drives" | rofi -dmenu -i -p "Drive?")
+[[ "$chosen" == "" ]] && exit 1
+name=$(echo "$chosen" | awk '{`print $1}')
+mountpoint=$(echo "$chosen" | awk '{print $3}')
+sudo umount "/dev/$name" 2> /dev/null && notify-send "Unmounted $chosen from $mountpoint" && exit 0

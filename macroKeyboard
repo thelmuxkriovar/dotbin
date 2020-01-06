@@ -1,0 +1,7 @@
+#!/bin/sh
+# TODO: get rid of the python dependency by using libevent in PHP itself with ffi, and get rid of the privilege escalation by adding the user to the input group
+echo "Macro Keyboard"
+inputId=$(cat /proc/bus/input/devices | grep -C 4 eyboard | grep sysrq | head -n 1 | sed "s@.*event@@g" | sed "s@ .*@@g") #TODO: use just one sed command
+pgrep -f "eventHandler.py $inputId" && sudo pkill -9 -f "eventHandler.py $inputId"
+pgrep -f "macroKeyboard.php" && sudo pkill -9 -f "macroKeyboard.php"
+((sudo -b eventHandler.py $inputId) | macroKeyboard.php)

@@ -1,0 +1,8 @@
+#!/bin/zsh
+tmp="$(mktemp)"
+ranger --choosedir="$tmp" "$@"
+if [ -f "$tmp" ]; then
+	dir="$(cat $tmp)"
+	rm -rf "$tmp"
+	[ -d "$dir" ] && [ "$dir" != "$(pwd)" ] && cd "$dir"
+fi

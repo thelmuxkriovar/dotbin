@@ -1,0 +1,34 @@
+#!/bin/php
+<?php
+declare(ticks=1);
+$defaultMode = true;
+pcntl_signal(SIGUSR1, function() use(&$defaultMode) {
+	$defaultMode = !$defaultMode;
+});
+$wifiInterface = "wlp2s0b1"; 
+while(true) {
+	$wifi = `iwconfig $wifiInterface`;
+	$ssid = substr($wifi, strpos($wifi, "ESSID:") + 6);
+	$ssid = substr($ssid, 0, strpos($ssid, "\n") - 1);
+	if(substr($ssid, 0, 4) == "off/") {
+		echo "睊 no wifi\n";
+		continue;
+	}
+	$ssid = substr($ssid, 1);
+	$ssid = substr($ssid, 0, strpos($ssid, "\""));
+	$ip = trim(`ip addr | grep $wifiInterface | tail -1`);
+	$ip = substr($ip, 0, strpos($ip, "/24")); 
+	$ip = substr($ip, 5); // 5 = "inet "	
+	$strength = 100 + intval(`iwconfig $wifiInterface | grep Signal | cut -d "=" -f3 | cut -d " " -f 1`);
+	if($defaultMode)
+		$additional = sprintf("%d%%", $strength);
+	else
+		$additional = $ssid;
+	printf(" %s (%s)\n", $ip, $additional);
+	if($defaultMode == false) {
+		sleep(2);
+		$defaultMode = true;
+	}
+	usleep(100000);
+}
+die();

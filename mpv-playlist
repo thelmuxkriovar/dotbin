@@ -1,0 +1,123 @@
+#!/usr/bin/php
+<?php
+define("socketFile", "/tmp/mpv-socket");
+define('socketUrl', 'unix://'.socketFile);
+function runCommand($command) {
+	$cmd = "echo ".escapeshellarg(json_encode(["command" => $command]))." | socat - ".socketFile;
+	return json_decode(`$cmd`, true);
+}
+function runNonJsonCommand(string $command) {
+	$cmd = "echo ".escapeshellarg($command)." | socat - ".socketFile;
+	return `$cmd`;
+}
+function sendNotification($text) {
+	$command = 'notify-send "MPV Shortcut" '.escapeshellarg($text);
+	`$command`;
+}
+function appendVideos(array $videos) {
+	$found = trim(`pgrep -f "mpv --input"`);
+	if(strlen($found) == 0) {
+		system("rm ".socketFile);
+		$video = trim(array_shift($videos));
+		sendNotification("Starting mpv with video: $video");
+		proc_close(proc_open('mpv --input-ipc-server='.socketFile.' --slang="en,eng" '.escapeshellarg($video).' & ', [], $___));
+		while(!file_exists(socketFile))
+			usleep(10);
+		while(!($socket = stream_socket_client(socketUrl, $errno, $errstr)))
+			usleep(10);
+	}else
+		$socket = stream_socket_client(socketUrl, $errno, $errstr);
+	foreach($videos as $line) {
+		$line = trim($line);
+		if(substr($line, -4) == ".srt")
+			continue;
+		fwrite($socket, "loadfile \"$line\" append-play\n\r");
+		sendNotification("Appended video to play list. $line");
+		usleep(1000);
+	}
+	fclose($socket);
+}
+
+$remaining = [];
+if($argc > 1) {
+	switch($argv[1]) {
+	case "status":
+			if(!file_exists("/tmp/mpv-socket"))
+				return;
+			$playlist = runcommand([ "get_property", "playlist" ]);
+			echo json_encode($playlist);
+			return;
+		break;
+		case "appender":
+			$clipboard = explode("\n", trim(`xclip -o`));
+			appendVideos($clipboard);
+		break;
+		case "save":
+			// saves remaining playlist to file
+			$playlist = runcommand([ "get_property", "playlist" ]);
+			$currentFound = false;
+			foreach($playlist['data'] as $video) {
+				if(isset($video["current"]) && $video["current"] == true)
+					$currentFound = true;
+				if($currentFound)
+					$remaining[] = $video['filename'];
+			}
+			file_put_contents("/home/danny/.config/mpv/temp-playlist", implode("\n", $remaining));
+		break;
+		case "restore":
+			// restores previously saved playlist
+			if($argc == 2)
+				$file = "/home/danny/.config/mpv/temp-playlist";
+			else
+				$file = $argv[2];
+			if(file_exists($file))
+				appendVideos(file($file));
+		break;
+		case "play":
+		case "pause":
+			runNonJsonCommand("cycle pause");
+			exit;
+		break;
+		default:
+			echo "Unknown command";
+			die();
+		break;
+	}
+}else{
+	$found = trim(`pgrep -f "mpv --input"`);
+	if(strlen($found) == 0)
+		die("");
+}
+$playlist = runcommand([ "get_property", "playlist" ]);
+foreach($playlist['data'] as $id => $video) {
+	if(isset($video['current']) && $video['current'] == true)
+		echo "\e[1m\e[7m🡆".str_repeat(" ", 3);
+	else
+		echo "\e[0m".str_repeat(" ", 4);
+	$videoNameShort = $video['filename'];
+	$maxLength = intval(`tput cols`);
+	if(strpos($videoNameShort, "youtube.com") === false) {		
+		$parts = explode("/", $videoNameShort);
+		$videoNameShort = implode("/", array_map(function($part) {
+			if(mb_strlen($part) + 1 > 16)
+				$part = mb_strimwidth($part, 0, 15, '~');
+			return $part;
+		}, $parts));
+		if(mb_strlen($videoNameShort) + 4 > $maxLength)
+			$videoNameShort = mb_strimwidth($videoNameShort, 0, $maxLength - 4, '...');
+	}
+	echo $videoNameShort."\n";
+}
+
+/*
+#!/bin/bash
+if pgrep -x mpv > /dev/null
+then
+	echo "loadfile "$(xclip -o)" append-play" | socat - /tmp/mpv-socket
+	notify-send "MPV Shortcut" "Appended video to play list."`xclip -o`
+else
+	rm /tmp/mpv-socket
+	notify-send "MPV Shortcut" "Starting mpv with video: "`xclip -o`
+	mpv --input-ipc-server=/tmp/mpv-socket --slang="en,eng" `xclip -o` &
+fi 
+*/

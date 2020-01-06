@@ -1,0 +1,5 @@
+#!/bin/sh
+screenshotPath="$HOME/Pictures/Screenshot-"$(date +"%FT%T%z")".png"
+scrot -s "$screenshotPath"
+xclip -selection clipboard -t image/png -i "$screenshotPath"
+notify-send "Took screenshot" "$screenshotPath" --icon=$screenshotPath

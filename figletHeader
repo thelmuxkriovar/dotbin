@@ -1,0 +1,19 @@
+#!/bin/zsh
+calcLength() {
+	echo $1 | awk '{ print length(), NR, $0 | "sort -rn" }' | awk '{ print $1 }' | head -n 1
+}
+
+symbol=${2:-#}
+start=${3:-"$symbol"}
+end=${4:-"$symbol"}
+text=$(figlet $1 | sed "s/^/$symbol /g;s/$/ $symbol/g")
+length=$(calcLength $text)
+lengthStart=$(calcLength $start)
+lengthStart=$(expr $length - $lengthStart)
+lengthEnd=$(calcLength $end)
+lengthEnd=$(expr $length - $lengthEnd)
+printf $start
+printf "%0.s$symbol" {1..$lengthStart}
+echo "\n$text"
+printf "%0.s$symbol" {1..$lengthEnd}
+printf $end

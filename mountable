@@ -1,0 +1,15 @@
+#!/bin/sh
+# The original script is by luke smith, adapted it to work with rofi (really, all the credit goes to him)
+
+drives=$(lsblk -l -o "KNAME,SIZE,TYPE,MOUNTPOINT" | grep -E "part|rom|lvm" | grep -v "/" | awk '{print $1, "(" $2 ")"}')
+chosen=$(echo "$drives" | rofi -dmenu -i -p "Drive?" | awk '{print $1}')
+[[ "$chosen" == "" ]] && exit 1
+sudo mount "$chosen" 2> /dev/null && notify-send "Mounted $chosen to default mountpoint" && exit 0
+dirs=$(find /mnt /media /home -type d -maxdepth 3 2> /dev/null)
+mountpoint=$(echo "$dirs" | rofi -dmenu -i -p "Mount Point?")
+[[ "$mountpoint" == "" ]] && exit 1
+if [[ ! -d "$mountpoint" ]]; then
+  mkdirconfirm=$(echo -e "No\nYes" | rofi -dmenu -i -p "$mountpoint doesn't exist. Create?")
+  [[ "$mkdirconfirm" == Yes ]] && sudo mkdir -p "$mountpoint"
+fi
+sudo mount "/dev/$chosen" $mountpoint && notify-send "$chosen mounted to $mountpoint"

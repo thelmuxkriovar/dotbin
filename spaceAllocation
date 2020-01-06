@@ -1,0 +1,58 @@
+#!/usr/bin/php
+<?php
+$oldWidth = 0;
+$oldHeight = 0;
+function progressBarStr(float $progress = 0, int $width = 0) {
+	$progress = min(1, max(0, $progress));
+	$wholeWidth = floor($progress * $width);
+	$remainderWidth = ($progress * $width) % 1;
+	$partialWidth = floor($remainderWidth * 8);
+	$remaining = $width - $wholeWidth - 1;
+	if($remaining < 0)
+		$partialChar = "";
+	else
+		$partialChar = ["░", "▏", "▎", "▍", "▌", "▋", "▊", "▉"][$partialWidth];
+	$line = "";
+	if($wholeWidth > 0)
+		$line = str_repeat("█", $wholeWidth);
+	$line .= $partialChar;
+	if($remaining > 0)
+	   $line .= str_repeat("░", $remaining);
+	return $line;
+}
+while(true) {
+	$disks = explode("\n", `df -x tmpfs -x devtmpfs | sed -n '1!p' | awk '{ print $1"\t"$3"\t"$4"\t"$6}'`);
+	array_pop($disks); // remove the last line (empty blank line)
+	$longestMountPoint = 0;
+	$disks = array_map(function($disk) use(&$longestMountPoint) {
+		$line = explode("\t", $disk);
+		if(strlen($line[3]) > $longestMountPoint)
+			$longestMountPoint = strlen($line[3]);
+		return [
+			"block" => $line[0],
+			"used" => intval($line[1]),
+			"total" => intval($line[2] + $line[1]),
+			"mountpoint" => $line[3]
+		];
+	}, $disks);
+	$width = intval(`tput cols`);
+	$height = intval(`tput lines`);
+	if($width != $oldWidth || $height != $oldHeight)
+		echo "\e[2J\e[1;1H";
+	$oldWidth = $width;
+	$oldHeight = $height;
+	foreach($disks as $id => $disk) {
+		$percentage = ($disk["used"] * 100) / $disk["total"];
+		$availWidth = $width - ($longestMountPoint + 12);
+		$filled = round(($availWidth * $percentage) / 100);
+		$bar = progressBarStr($percentage / 100, $availWidth); // str_repeat("█", $filled).str_repeat("░", $availWidth - $filled);
+		$format  = "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s";
+		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s %7.3f%%";
+		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s";
+		echo sprintf($format, 
+			($id * 4) + 2, "", $bar,
+			($id * 4) + 3, $disk["mountpoint"], $bar, $percentage,
+			($id * 4) + 4, "", $bar
+		);
+	}
+}

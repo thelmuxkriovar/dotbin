@@ -1,0 +1,481 @@
+#!/bin/php
+<?php
+declare(ticks=1);
+
+// TODO: rewrite to just use neovim embedded
+
+// Dear ANSI designers, look I don't have anything against with you, you made an excellent system, but why is it one indexed? WHY? 1;1H is the first column of the first row, not the second column of the second row, WHY?
+
+class ANSI {
+	const csi = "\x1b[";
+
+	const style = [
+		"reset" => 0,
+		"bold" => 1,
+		"italic" => 3,
+		"underline" => 4,
+		"imageNegative" => 7,
+		"fontDefault" => 10,
+		"font2" => 11,
+		"font3" => 12,
+		"font4" => 13,
+		"font5" => 14,
+		"font6" => 15,
+		"imagePositive" => 27,
+		"black" => 30,
+		"red" => 31,
+		"green" => 32,
+		"yellow" => 33,
+		"blue" => 34,
+		"magenta" => 35,
+		"cyan" => 36,
+		"white" => 37,
+		"gray" => 90,
+		'bg-black' => 40,
+		'bg-red' => 41,
+		'bg-green' => 42,
+		'bg-yellow' => 43,
+		'bg-blue' => 44,
+		'bg-magenta' => 45,
+		'bg-cyan' => 46,
+		'bg-white' => 47,
+		'bg-gray' => 100
+	];
+
+	function styles(string ...$styles) {
+		return self::csi.implode(";", array_map(function($style) {
+			return self::style[$style];
+		}, $styles))."m";
+	}
+
+	function format($string, ...$styles) {
+		return self::styles($styles).$string.self::styles('reset');
+	}
+
+	function cursorUp(int $lines = 1) { return self::csi.$lines.'A'; }
+	function cursorDown(int $lines = 1) { return self::csi.$lines.'B'; }
+	function cursorForward(int $chars = 1) { return self::csi.$chars.'C'; }
+	function cursorBackward(int $chars = 1) { return self::csi.$chars.'D'; }
+	function cursorNextLine(int $lines = 1) { return self::csi.$lines.'E'; }
+	function cursorPreviousLine(int $lines = 1) { return self::csi.$lines.'F'; }
+	function cursorColumn(int $column = 1) { return self::csi.$column.'G'; }
+	function cursorPosition(int $x = 1, $y = 1) { return self::csi.$y.";".$x."H"; }
+	
+	/**
+	 * Clears part of the screen. If n is 0, clear from cursor to end of screen. If n is 1, clear from cursor to beginning of the screen. If n is 2, clear entire screen.
+	 *
+	 * @param integer $n
+	 * @return string
+	 */
+	function clearDisplay(int $n = 0) { return self::csi.$n."J"; }
+
+	/**
+	 * Erases part of the line. If n is zero, clear from cursor to the end of the line. If n is one, clear from cursor to beginning of the line. If n is two, clear entire line. Cursor position does not change.
+	 *
+	 * @param integer $n
+	 * @return string
+	 */
+	function clearLine(int $n = 0) { return self::csi.$n."K"; }
+}
+
+class Modes {
+	const Default = 1;
+	const Insert = 2;
+}
+
+exec('stty -icanon');
+exec('stty -echo');
+
+$mode = Modes::Default;
+
+function debug(...$args) {
+	ob_start();
+	var_dump(...$args);
+	file_put_contents("debug", ob_get_clean());
+}
+
+class ConsoleSize {
+	function getWidth() { return intval(`tput cols`); }
+	function getHeight() { return intval(`tput lines`); }
+}
+
+class ImageDisplay {
+	private $proc;
+	private $pipes;
+	private $cs;
+	private $dotFile; 
+
+	private $x;
+	private $y;
+	private $xPercent;
+	private $yPercent;
+
+	function __construct(ConsoleSize $cs, $dotFilePng) {
+		$this->cs = $cs;
+		$this->proc = proc_open("ueberzug layer -p json", [["pipe", "r"], ["pipe", "w"], ["file", "error.log", "a"]], $pipes);
+		$this->pipes = $pipes;
+		$this->dotFile = $dotFilePng;
+	}
+
+	function addCoords(int $x, int $y) {
+		$this->updateCoords($this->x + $x, $this->y + $y);
+	}
+
+	function updateCoords(int $x, int $y) {
+		list($imgWidth, $imgHeight) = getimagesize($this->dotFile);
+		$x = max(0, $x);
+		$y = max(0, $y);
+		$x = min($x, $imgWidth);
+		$y = min($y, $imgHeight);
+		$this->x = $x;
+		$this->y = $y;
+		if ($x == 0)
+			$this->xPercent = 0;
+		else
+			$this->xPercent = $x / $imgWidth;
+		if ($y == 0)
+			$this->yPercent = 0;
+		else
+			$this->yPercent = $y / $imgHeight;
+		$this->xPercent = min($this->xPercent, 1);
+		$this->yPercent = min($this->yPercent, 1);
+	}
+
+	function draw() {
+		$width = $this->cs->getWidth();
+		$json = [
+			"action" => "add",
+			"width" => floor($width / 2),
+			"height" => $this->cs->getHeight(),
+			"x" => floor($width / 2),
+			"y" => 0,
+			"path" => $this->dotFile,
+			"identifier" => $this->dotFile,
+			'scaler' => 'crop',
+			'scaling_position_x' => $this->xPercent,
+			'scaling_position_y' => $this->yPercent,
+			'synchronously_draw' => 'true'
+		];
+		fwrite($this->pipes[0], json_encode($json)."\n");
+	}
+
+	function __destruct() {
+		proc_close($this->proc);
+	}
+}
+
+class MouseControl {
+	function __construct() {
+		echo "\e[?1000h\n";
+	}
+
+	function __destruct() {
+		echo "\e[?1000l\n";
+	}
+}
+
+class Buffer {
+	public $showLines = true;
+	public $hexLines = true;
+
+	public $scrollPosition = 0;
+	public $bufferPointer;
+	public $cursorX = 0;
+	public $cursorY = 0;
+
+	private $dirty = false;
+	private $path;
+	private $ansi;
+	private $cs;
+
+	function __construct(ConsoleSize $cs, ANSI $ansi, $path) {
+		$this->cs = $cs;
+		$this->ansi = $ansi;
+		$this->path = $path;
+		$this->bufferPointer = explode("\n", file_get_contents($this->path));
+		$this->bufferPointer = array_map(function ($line) {
+			return str_replace("\t", "    ", $line);
+		}, $this->bufferPointer);
+	}
+
+	function getLine(int $y) {
+		if(count($this->bufferPointer) >= $this->scrollPosition + $y)
+			return $this->bufferPointer[$this->scrollPosition + $y];
+		return null;
+	}
+
+	function characterAt($x, $y) {
+		$line = $this->getLine($y);
+		if(is_null($line))
+			return null;
+		if(strlen($line) <= $x)
+			return $line[$x];
+		return null;
+	}
+
+	function appendAtCursor(string $string = "") {
+		$currentLine = $this->getLine($this->cursorY);
+		$line = substr($currentLine, 0, $this->cursorX);
+		$line .= $string;
+		$line .= substr($currentLine, $this->cursorX);
+		$this->bufferPointer[$this->scrollPosition + $this->cursorY] = $line;
+		$this->cursorX += strlen($string);
+	}
+
+	function deleteAtCursor($isBackward = false) {
+		$currentLine = $this->getLine($this->cursorY);
+		if($isBackward) {
+			$line = substr($currentLine, 0, $this->cursorX);
+			$line .= substr($currentLine, $this->cursorX + 1);
+		} else {
+			if($this->cursorX == 0) {
+				$this->deleteLineAtCursor();
+				$line = $this->bufferPointer[$this->scrollPosition + $this->cursorY].$currentLine;
+			}else{
+				$line = substr($currentLine, 0, $this->cursorX - 1);
+				$line .= substr($currentLine, $this->cursorX);
+			}
+		}
+		$this->bufferPointer[$this->scrollPosition + $this->cursorY] = $line;
+		if(!$isBackward)
+			$this->cursorX--;
+	}
+
+	function deleteLineAtCursor() {
+		$newDotFile = array_slice($this->bufferPointer, 0, $this->scrollPosition + $this->cursorY);
+		$newDotFile = array_merge($newDotFile, array_slice($this->bufferPointer, $this->scrollPosition + $this->cursorY + 1));
+		$this->bufferPointer = $newDotFile;
+		//file_put_contents($dotFile, implode("\n", $buffer->bufferPointer));
+	}
+
+	function newLineAtCursor() {
+		$line = $this->getLine($this->cursorY);
+		$newDotFile = array_slice($this->bufferPointer, 0, $this->scrollPosition + $this->cursorY);
+		$newDotFile[] = substr($line, 0, $this->cursorX);
+		$newDotFile[] = substr($line, $this->cursorX);
+		$newDotFile = array_merge($newDotFile, array_slice($this->bufferPointer, $this->scrollPosition + $this->cursorY + 1));
+		$this->bufferPointer = $newDotFile;
+		$this->cursorY++;
+		$this->cursorX = 0;
+	}
+
+	function characterAtCursor() {
+		return $this->characterAt($this->cursorX, $this->cursorY);
+	}
+
+	function backOneCharacter() {
+		if($this->cursorX > 0)
+			$this->cursorX--;
+		else {
+			$this->cursorY--;
+			if($this->cursorY < 0)
+				$this->cursorY = 0;
+			$this->cursorX = strlen($this->getLine($this->cursorY));
+		}	
+	}
+
+	function scrollDown(int $rows = 1) {
+		$this->scrollPosition += $rows;
+		$this->scrollPosition = max(
+			0,
+			min(
+				$this->scrollPosition,
+				count($this->bufferPointer) - 1
+			)
+		);
+	}
+
+	function draw() {
+		$height = $this->cs->getHeight();
+		$shownLines = array_slice($this->bufferPointer, $this->scrollPosition, $height - 1);
+		$y = 1;
+		foreach($shownLines as $line) {
+			echo $this->ansi->cursorPosition(1, $y);
+			if($this->showLines) {
+				$lineNumber = $y + $this->scrollPosition;
+				if($this->hexLines)
+					$lineNumber = dechex($lineNumber);
+				echo str_pad($lineNumber, 4, " ", STR_PAD_LEFT);
+				echo "| ";
+			}
+			echo $line;
+			$y++;
+		}
+	}
+}
+
+list(, $dotFile) = $argv;
+$dotFilePng = substr($dotFile, 0, -4) . ".png";
+
+$consoleSize = new ConsoleSize();
+$mouseControl = new MouseControl();
+$ansi = new ANSI();
+$buffer = new Buffer($consoleSize, $ansi, $dotFile);
+$imageDisplay = new ImageDisplay($consoleSize, $dotFilePng);
+
+$char = "";
+
+function parseEscape($nextChar = null) {
+	static $xStart = 0;
+	static $yStart = 0;
+	global $buffer; 
+	global $imageDisplay;
+	global $consoleSize;
+	if($nextChar == null)
+		$nextChar = fread(STDIN, 1);
+	if($nextChar == "[") {
+		$nextChar = fread(STDIN, 1);
+		switch($nextChar) {
+			case "A":
+				$buffer->cursorY--;
+			break;
+			case "B":
+				$buffer->cursorY++;
+			break;
+			case "C":
+				$buffer->cursorX++;
+			break;
+			case "D":
+				$buffer->backOneCharacter();
+			break;
+			case "1":
+				$nextChar = fread(STDIN, 2);
+				if($nextChar == ";2") {
+					$nextChar = fread(STDIN, 1);
+					if($nextChar == "A")
+						$buffer->scrollDown(-2);
+					if($nextChar == "B")
+						$buffer->scrollDown(2);
+				}
+			break;
+			case "3":
+				$nextChar = fread(STDIN, 1);
+				if ($nextChar == "~")
+					$buffer->deleteAtCursor(true);
+			break;
+			case "5":
+				$nextChar = fread(STDIN, 1);
+				if($nextChar == "~")
+					$buffer->scrollDown(-5);
+			break;
+			case "6":
+				$nextChar = fread(STDIN, 1);
+				if($nextChar == "~")
+					$buffer->scrollDown(5);
+			break;
+			case "M":
+				$bits = fread(STDIN, 1);
+				$x = ord(fread(STDIN, 1)) - 32;
+				$y = ord(fread(STDIN, 1)) - 32;
+				if($x > floor($consoleSize->getWidth() / 2)) {
+					if($bits == " ") {
+						$xStart = $x;
+						$yStart = $y;
+					}
+					
+					if($bits == "#")
+						$imageDisplay->addCoords(
+							($x - $xStart) * -12,
+							($y - $yStart) * -12
+						);
+				}else{
+					switch($bits) {
+						case "`": $buffer->scrollDown(-1); break;
+						case "p": $buffer->scrollDown(-2); break;
+						case "h": $buffer->scrollDown(-3); break;
+						case "d": $buffer->scrollDown(-5); break;
+						case "t": $buffer->scrollDown(-8); break;
+						case "a": $buffer->scrollDown(1); break;
+						case "q": $buffer->scrollDown(2); break;
+						case "i": $buffer->scrollDown(3); break;
+						case "e": $buffer->scrollDown(5); break;
+						case "u": $buffer->scrollDown(8); break;
+						case "#":
+							if($buffer->showLines)
+								$x -= 6;
+							$buffer->cursorX = $x - 1;
+							$buffer->cursorY = $y - 1;
+						break;
+					}
+				}
+			break;
+			default: 
+				echo "it's an escape character.";
+				file_put_contents("debug", fread(STDIN, 3));
+				exit();
+		}
+	}
+}
+
+do {
+	if($mode == Modes::Default)
+		switch($char) {
+			case "\e":
+				parseEscape();
+			break;
+			case ":":
+				exec('stty echo');
+				echo $ansi->cursorPosition(1, $height).":";
+				$line = trim(fgets(STDIN));
+				if($line == "q")
+					exit();
+				if($line == "w")
+					file_put_contents($dotFile, implode("\n", $buffer->bufferPointer));
+				exec('stty -echo');
+			break;
+			case "d":
+				$buffer->deleteLineAtCursor();
+			break;
+			case "i":
+				$mode = Modes::Insert;
+			break;
+		}
+	elseif($mode == Modes::Insert)
+		switch($char) {
+			case "\e":
+				$nextChar = fread(STDIN, 1);
+				if($nextChar == "\e")
+					$mode = Modes::Default;
+				else
+					parseEscape($nextChar);
+			break;
+			case chr(127):
+			case chr(8):
+				$buffer->deleteAtCursor();
+			break;
+			case chr(10):
+				$buffer->newLineAtCursor();
+			break;
+			default:
+				$buffer->appendAtCursor($char);
+				//file_put_contents($dotFile, implode("\n", $buffer->bufferPointer));
+			break;
+		}
+
+	$height = $consoleSize->getHeight();
+	$shownLines = array_slice($buffer->bufferPointer, $buffer->scrollPosition, $height - 1);
+
+	$lineLength = strlen($shownLines[$buffer->cursorY]);
+	if($buffer->cursorX < 0)
+		$buffer->cursorX = 0;
+	if($buffer->cursorX > $lineLength)
+		$buffer->cursorX = $lineLength;
+		
+	echo $ansi->clearDisplay(2).$ansi->cursorPosition(1, 1);
+	
+	$buffer->draw();
+
+	echo $ansi->cursorPosition(1, $height);
+	if($mode == Modes::Insert)
+		echo "Insert Mode";
+	else
+		echo $ansi->clearLine(2);
+	system("dot -Tpng $dotFile -o $dotFilePng");
+
+	$imageDisplay->draw();
+	
+	$x = $buffer->cursorX + 1;
+	if($buffer->showLines) // 5 for gutter
+		$x += 6;
+	echo $ansi->cursorPosition($x, $buffer->cursorY + 1);
+} while($char = fread(STDIN, 1));

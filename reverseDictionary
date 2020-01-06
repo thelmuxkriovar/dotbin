@@ -1,0 +1,37 @@
+#!/usr/bin/php
+<?php
+// TODO: rewrite to use the actual datamuse api, as to not overload onelook's server (datamuse.com/api/)
+if($argc < 2)
+	die("Format: reverseDictionary [-n entries] {word}");
+$wordIndex = null;
+$opts = getopt('n:', ['limit'], $wordIndex);
+$word = implode(" ", array_slice($argv, $wordIndex));
+$word = urlencode($word);
+if(isset($opts['n']))
+	$limit = intval($opts['n']);
+else
+	$limit = 5;
+if(file_exists("/tmp/reverseDictionaryDefinition".md5($word).".json"))
+	$dict = json_decode(file_get_contents("/tmp/reverseDictionaryDefinition".md5($word).".json"), true);
+else {
+	$json = file_get_contents("https://api.onelook.com/words?v=ol_gte3&ml=$word&qe=ml&md=dp&max=2000");
+	file_put_contents("/tmp/reverseDictionaryDefinition".md5($word).".json", $json);
+	$dict = json_decode($json, true);
+}
+
+foreach($dict as $i => $dictEntry) {
+	if(!isset($dictEntry["defs"]))
+		continue;
+	$word = $dictEntry["word"];
+	if(isset($dictEntry["tags"]))
+		$word .= "(".implode(", ", $dictEntry["tags"]).")";
+	echo $word."\n";
+	foreach($dictEntry["defs"] as $j => $definition) {
+		list($type, $definition) = explode("\t", $definition, 2);
+		printf("\t %d. %s\n", $j + 1, $definition);
+	}
+	echo "\n";
+	if($i >= $limit)
+		die();
+}
+//var_dump($dict);

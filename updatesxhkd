@@ -1,0 +1,3 @@
+#!/bin/sh
+notify-send "Shortcuts Updated"
+pkill -SIGUSR1 sxhkd

@@ -1,0 +1,68 @@
+#!/bin/php
+<?php
+function sendDump(...$args) {
+	ob_start();
+	var_dump(...$args);
+	$content = ob_get_clean();
+	$content = escapeshellarg($content);
+	`notify-send 'dump' $content`;
+}
+$currentWindowId = (int) trim(`xdotool getwindowfocus`);
+$currentWindowStr = explode("\n", `xprop -id $currentWindowId`);
+$tempWindow = [];
+$currentWindow = [];
+foreach($currentWindowStr as $line) {
+	if(strpos($line, "=") === false)
+		continue;
+	list($key, $value) = explode("=", $line);
+	$key = trim($key);
+	$value = trim($value);
+	$tempWindow[$key] = $value;
+}
+$currentWindow["pid"] = $tempWindow["_NET_WM_PID(CARDINAL)"];
+$currentWindow["class"] = explode(", ", $tempWindow["WM_CLASS(STRING)"]);
+array_walk($currentWindow["class"], function(&$item) {
+	$item = substr($item, 1, -1);
+});
+$currentWindow["title"] = substr($tempWindow["WM_NAME(STRING)"], 1, -1);
+$windowType = $currentWindow["class"][0];
+$pid = $currentWindow["pid"];
+$globalPid = $pid;
+if($windowType === "termite") {
+	if(substr($currentWindow["title"], -3) == "VIM") {
+		$windowType = "vim";
+		$processTree = `pstree -lpA $pid | head -1`;
+		$processTree = preg_split("/\-[\-\+]\-/", $processTree);
+		foreach($processTree as $process) {
+			if(substr($process, 0, 3) == "vim") { // found vim
+				$pid = (int) substr($process, 4, -1);
+				break;
+			}
+		}
+		if($pid == $globalPid) {
+			`notify-send "Smart Make" "Smart Make shat itself."`; 
+			return 255;
+		}
+	}
+}
+$cwd = realpath("/proc/$pid/cwd");
+if($cwd == "/home/danny/") {
+	`notify-send "Smart Make" "The current working directory seems to be \$HOME, this is dangerous, I refuse to compile anything!"`;
+	return;
+}
+$genericWindows = ["vim"];
+if(!in_array($windowType, $genericWindows)) {
+	switch($windowType) {
+		default:
+			`notify-send "Smart Make" "${windowType}のメーク方法教えてください。"`;
+	}
+	return;
+}
+if(!file_exists($cwd."/.smartMake")) {
+	`notify-send "Smart Make" "I can't find .smartMake, don't know what to do."`;
+	return 1;
+}
+if(!is_executable($cwd."/.smartMake"))
+	chmod($cwd."/.smartMake", 0755);
+chdir($cwd);
+`./.smartMake`;
