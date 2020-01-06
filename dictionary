@@ -1,0 +1,134 @@
+#!/usr/bin/php
+<?php
+function defaultValue(&$opts, string $key, $value) {
+	if(!isset($opts[$key]))
+		$opts[$key] = $value;
+}
+function cacheJson($url) {
+	$name = sha1($url);
+	if(file_exists("/tmp/dictionary$name.json"))
+		return json_decode(file_get_contents("/tmp/dictionary$name.json"), true);
+	$json = file_get_contents($url);
+	file_put_contents("/tmp/dictionary$name.json", $json);
+	return json_decode($json, true);
+}
+function merriamWebster(string $word, $opts) : int {
+	$wordOrig = $word;
+	$word = urlencode($word);
+	$key = getenv("DICTIONARYAPIDOTCOMKEY");
+	if(empty($key)) {
+		echo "The merriam webster dictionary requires an api key, get one for free at https://dictionaryapi.com/ and set DICTIONARYAPIDOTCOMKEY in your shell config.\n";
+		return 255;
+	}
+	$dict = cacheJson("https://dictionaryapi.com/api/v3/references/collegiate/json/$word?key=$key");
+	if(empty($dict))
+		return 255;
+	if(is_string($dict[0])) {
+		echo "Can't find a definition for $wordOrig. Did you perhaps mean?\n";
+		foreach($dict as $i => $word) {
+			if($i >= (int)$opts['limit'])
+				return 1;
+			if($word == "critical region") // XXX: I don't know why but this sometimes shows up and causes an infinite loop
+				return 1;
+			$newOpts = $opts;
+			$newOpts['limit'] = 1;
+			echo " - $word \n";
+			merriamWebster($word, $newOpts);
+		}
+		return 1;
+	}
+	foreach($dict as $i => $dictEntry) {
+		if(!isset($dictEntry['hwi']) || !isset($dictEntry['hwi']['hw']))
+			continue;
+		if($i >= (int)$opts['limit'])
+			return 0;
+		$word = $dictEntry["hwi"]["hw"];
+		if(isset($dictEntry["hwi"]["prs"]) && isset($dictEntry["hwi"]["prs"][0]) && isset($dictEntry["hwi"]["prs"][0]["mw"]))
+			$word .= " 「".$dictEntry["hwi"]["prs"][0]["mw"]."」";
+		echo sprintf("%s (%s)\n", $word, $dictEntry["fl"]);
+		foreach($dictEntry["shortdef"] as $j => $def)
+			echo sprintf("\t %d. %s\n", $j + 1, $def);
+		echo "\n";
+	}
+	return 0;
+}
+function dataMuse(string $word, $opts) : int {
+	$word = urlencode($word);
+	$validTypes = ["reverse" => "ml", "sound" => "sl", "meaning" => "ml", "spelling" => "sp", "synonym" => "rel_syn", "trigger" => "rel_trg", "antonym" => "rel_ant", "describe" => "rel_jjb", "describes" => "rel_jja", "adjectiveForNoun" => "rel_jjb", "nounForAdjective" => "rel_jjb", "whatKind" => "rel_scp", "specify" => "rel_scp", "degeneralize" => "rel_gen", "kindOf" => "rel_gen", "holonym" => "rel_com", "isPartOf" => "rel_par", "follower" => "rel_bga", "predecessor" => "rel_bgb", "rhyme" => "rel_rhy", "soundsLike" => "rel_hom", "homophone" => "rel_hom", "consonant" => "cns"];
+	if(!isset($opts['type']) || (
+		!isset($validTypes[$opts['type']]) &&
+		!isset(array_flip($validTypes)[$opts['type']])
+	)) {
+		echo "When using datamuse you should specify a type. The available types are: \n";
+		ob_start();
+		$x = 0;
+		foreach($validTypes as $name => $code) {
+			echo "$name ($code)\t";
+			$x++;
+			if($x == 4) {
+				echo "\n";
+				$x = 0;
+			}
+		}
+		$text = ob_get_clean();
+		$text = escapeshellarg($text);
+		system("echo ".$text." | column -N ',' -t");
+		return 1;
+	}elseif(isset($validTypes[$opts['type']]))
+		$opts['type'] = $validTypes[$opts['type']];
+	$url = "https://api.datamuse.com/words?".$opts['type']."=$word&md=dps&max=1000";
+	if(isset($opts['contextLeft']))
+		$url .= "&lc=".urlencode($opts['contextLeft']);
+	if(isset($opts['contextRight']))
+		$url .= "&rc=".urlencode($opts['contextRight']);
+	if(isset($opts['topics']))
+		$url .= "&topics=".urlencode($opts['topics']);
+	$dict = cacheJson($url);
+	foreach($dict as $i => $dictEntry) {
+		if(!isset($dictEntry["defs"]))
+			continue;
+		if($i >= (int) $opts['limit'])
+			return 0;
+		$word = $dictEntry["word"];
+		if(isset($dictEntry["tags"]))
+			$word .= " (".implode(", ", $dictEntry["tags"]).")";
+		echo $word."\n";
+		foreach($dictEntry["defs"] as $j => $definition) {
+			list($type, $definition) = explode("\t", $definition, 2);
+			printf("\t %d. %s\n", $j + 1, $definition);
+		}
+		echo "\n";
+	}
+	return 0;
+}
+if($argc < 2)
+	die("Format: dictionary {word}");
+$opts = getopt("mr", ['limit:', 'source:', 'type:', "contextLeft:", "contextRight:", "topics:"], $wordIndex);
+defaultValue($opts, "limit", 5);
+defaultValue($opts, "source", "merriam-webster");
+$word = implode(" ", array_slice($argv, $wordIndex));
+if(isset($opts['m'])) {
+	$opts['source'] = "dataMuse";
+	unset($opts['m']);
+}
+if(isset($opts['r'])) {
+	$opts['source'] = 'dataMuse';
+	$opts['type'] = 'reverse';
+	unset($opts['r']);
+}
+switch($opts['source']) {
+	case "merriam-webster":
+		$return = merriamWebster($word, $opts);
+		if($return != 0)
+			exit($return);
+	break;
+	case "dataMuse":
+		$return = dataMuse($word, $opts);
+		if($return != 0)
+			exit($return);
+	break;
+	default:
+		echo "Unknown source ".$opts['source'];
+		exit(127);
+	break;
+}
