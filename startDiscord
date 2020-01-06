@@ -1,0 +1,19 @@
+#!/bin/php
+<?php
+date_default_timezone_set("Europe/Rome");
+$discord = `pgrep -x "Discord"`;
+if($discord == "" && $discord == null) {
+	proc_close(proc_open('discord &', [], $__));
+	sleep(2);
+}
+$hour = DateTime::createFromFormat("H:i:s a", date("H:i:s a"));
+$allowedMax = DateTime::createFromFormat("H:i:s a", "2:00:00 am");
+$allowedMin = DateTime::createFromFormat("H:i:s a", "9:30:00 am");
+if($hour < $allowedMax || $hour > $allowedMin)
+	`i3-msg 'scratchpad show'`;
+else {
+	$maxVis = $allowedMax->format("H:i a");
+	$minVis = $allowedMin->format("H:i a");
+	`notify-send "Discord is currently not available." "\n<b>Reason</b>: <i>Discord cannot be used between <b>$maxVis and $minVis</b>.</i>" --icon="/usr/share/pixmaps/discord.png"`;
+	`i3-msg '[class="discord"] move scratchpad'`;
+}
