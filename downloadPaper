@@ -1,0 +1,25 @@
+#!/bin/sh
+if [ "$#" -ne 1 ]; then
+	printf "Enter DOI: "
+	read -r doi
+else
+	doi=$1
+fi
+url="https://api.openaccessbutton.org/find?id=$doi"
+out=$(wget -o /dev/null -O - $url)
+url=$(echo $out | jq -r '.url')
+if [[ "$url" == "" || "$url" == "null" ]]; then
+	echo "Couldn't find valid URL for paper."
+	exit 1
+fi
+title=$(echo $out | jq -r '.metadata.title' | sed 's@[^A-Za-z0-9\-\ ]@@g')
+if [[ "$title" == "" || "$title" == "null" ]]; then
+	echo "Couldn't find valid title for paper."
+	printf "Enter title: "
+	read -r title
+fi
+echo "Found paper"
+echo -e "\tUrl: $url"
+echo -e "\tTitle: $title"
+title="$title.pdf"
+wget -o /dev/null -O "$HOME/Documents/Papers/$title" $url
