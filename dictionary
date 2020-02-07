@@ -32,7 +32,6 @@ function merriamWebster(string $word, $opts) : int {
 				return 1;
 			$newOpts = $opts;
 			$newOpts['limit'] = 1;
-			echo " - $word \n";
 			merriamWebster($word, $newOpts);
 		}
 		return 1;
@@ -45,7 +44,10 @@ function merriamWebster(string $word, $opts) : int {
 		$word = $dictEntry["hwi"]["hw"];
 		if(isset($dictEntry["hwi"]["prs"]) && isset($dictEntry["hwi"]["prs"][0]) && isset($dictEntry["hwi"]["prs"][0]["mw"]))
 			$word .= " 「".$dictEntry["hwi"]["prs"][0]["mw"]."」";
-		echo sprintf("%s (%s)\n", $word, $dictEntry["fl"]);
+		$wordType = '';
+		if(isset($dictEntry['fl']))
+			$wordType = '('.$dictEntry['fl'].')';
+		echo sprintf("%s %s\n", $word, $wordType);
 		foreach($dictEntry["shortdef"] as $j => $def)
 			echo sprintf("\t %d. %s\n", $j + 1, $def);
 		echo "\n";
