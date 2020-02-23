@@ -1,0 +1,15 @@
+#!/bin/php
+<?php
+$opts = getopt("g", ['glue:'], $regexIndex);
+if(!isset($opts['glue']))
+	$glue = "\t";
+else
+	$glue = $opts['glue'];
+if(isset($opts['g'])) {
+	$regex = $argv[$regexIndex]; 
+	while(($line = fgets(STDIN)) !== false)
+		if(preg_match($regex, $line, $matches)) {
+			array_shift($matches);
+			echo implode($glue, $matches)."\n";
+		}
+}
