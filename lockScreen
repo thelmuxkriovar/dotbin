@@ -1,5 +1,5 @@
 #!/bin/sh
 
-i3lock -i Pictures/Backgrounds/lock.jpg  -m --clock --composite -t --wrongcolor=ffffffff --datecolor=ffffffff --timecolor=ffffffff
+i3lock -i Pictures/Backgrounds/lock.jpg --clock --composite -t --wrongcolor=ffffffff --datecolor=ffffffff --timecolor=ffffffff --datestr="%A, %Y-%m-%d" --wrongtext="Just go away."
 
 # betterlockscreen --lock -w dimblur -l dimblur
