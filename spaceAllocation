@@ -20,8 +20,14 @@ function progressBarStr(float $progress = 0, int $width = 0) {
 	   $line .= str_repeat("░", $remaining);
 	return $line;
 }
+// original code from https://stackoverflow.com/a/2510540
+function toBytes($number, $startingUnit = 1) {
+	$base = log($number, 1024);
+	$bases = ["", "k", "M", "G", "T", "P"];
+	return number_format(pow(1024, $base - floor($base)), 2).$bases[floor($base) + $startingUnit];
+}
 while(true) {
-	$disks = explode("\n", `df -x tmpfs -x devtmpfs | sed -n '1!p' | awk '{ print $1"\t"$3"\t"$4"\t"$6}'`);
+	$disks = explode("\n", `df -x tmpfs -x devtmpfs | grep -v /boot | sed -n '1!p' | awk '{ print $1"\t"$3"\t"$4"\t"$6}'`);
 	array_pop($disks); // remove the last line (empty blank line)
 	$longestMountPoint = 0;
 	$disks = array_map(function($disk) use(&$longestMountPoint) {
@@ -31,7 +37,7 @@ while(true) {
 		return [
 			"block" => $line[0],
 			"used" => intval($line[1]),
-			"total" => intval($line[2] + $line[1]),
+			"total" => (intval($line[2]) + intval($line[1])),
 			"mountpoint" => $line[3]
 		];
 	}, $disks);
@@ -43,16 +49,16 @@ while(true) {
 	$oldHeight = $height;
 	foreach($disks as $id => $disk) {
 		$percentage = ($disk["used"] * 100) / $disk["total"];
-		$availWidth = $width - ($longestMountPoint + 12);
+		$availWidth = $width - ($longestMountPoint + 17);
 		$filled = round(($availWidth * $percentage) / 100);
-		$bar = progressBarStr($percentage / 100, $availWidth); // str_repeat("█", $filled).str_repeat("░", $availWidth - $filled);
-		$format  = "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s";
-		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s %7.3f%%";
-		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s";
+		$bar = progressBarStr($percentage / 100, $availWidth);
+		$format  = "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s Used: %7s";
+		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s Total: %6s";
+		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s (%10.6f%%)";
 		echo sprintf($format, 
-			($id * 4) + 2, "", $bar,
-			($id * 4) + 3, $disk["mountpoint"], $bar, $percentage,
-			($id * 4) + 4, "", $bar
+			($id * 4) + 2, "", $bar, toBytes($disk['used']),
+			($id * 4) + 3, $disk["mountpoint"], $bar, toBytes($disk['total']),
+			($id * 4) + 4, "", $bar, $percentage,
 		);
 	}
 }
