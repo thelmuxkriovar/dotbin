@@ -52,6 +52,9 @@ if($argc > 1) {
 			$clipboard = explode("\n", trim(`xclip -o`));
 			appendVideos($clipboard);
 		break;
+		case 'add':
+			appendVideos([$argv[2]]);
+		break;
 		case "save":
 			// saves remaining playlist to file
 			$playlist = runcommand([ "get_property", "playlist" ]);
