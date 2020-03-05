@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/zsh
 screenshotPath="$HOME/Pictures/Screenshot-"$(date +"%FT%T%z")".png"
-scrot -s "$screenshotPath"
+slop=$(slop -r wiggle,crosshair -b 2)
+read -r selection < <(echo $slop)
+maim --geometry $selection "$screenshotPath"
 xclip -selection clipboard -t image/png -i "$screenshotPath"
 notify-send "Took screenshot" "$screenshotPath" --icon=$screenshotPath
