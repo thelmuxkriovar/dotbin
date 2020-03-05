@@ -1,13 +1,14 @@
-#!/bin/php
-<?php
-$file = `find ~/.bin -type f -perm -u+x -prune | fzf --cycle --print-query --preview='highlight -O ansi {}' --preview-window=up:30% | tail -1`;
-$file = trim($file);
-if($file == "" || $file == ":q")
-	return;
-$HOME = getenv("HOME");
-if(!file_exists($file)) {
-	touch("$HOME/.bin/$file");
-	chmod("$HOME/.bin/$file", 0755);
-}
-chdir("$HOME/.bin");
-system("nvim $file > `tty`");
+#!/bin/zsh
+file=$(find ~/.bin -type f -perm -u+x -prune | fzf --cycle --print-query --preview='highlight -O ansi {}' --preview-window=up:30% | tail -1);
+if [[ "$file" == "" ]]; then
+	exit 1
+fi
+if [[ "$file" == ":q" ]]; then
+	exit 1
+fi
+if ! [ -f "$HOME/.bin/$file" ]; then
+	touch "$HOME/.bin/$file"
+	chmod +x "$HOME/.bin/$file"
+fi
+cd "$HOME/.bin";
+nvim $file > `tty`;
