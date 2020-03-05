@@ -8,13 +8,13 @@ foreach($accounts as $account) {
 	if(trim($account) == "") // ignore empty lines
 		continue;
 	$parts = explode("\t", $account);
-	$search = $parts[0]." (".$parts[2].") ";
+	$search = $parts[0]." (".$parts[2].")";
 	$id = $parts[1];
 	$accountToId[$search] = $id;
 	$searchableAccounts .= $search."\n";
 }
 $searchableAccounts = escapeshellarg($searchableAccounts);
-$selection = trim(`echo $searchableAccounts | dmenu -w $currentWindowId -l 10 -i -p "Website?"`);
+$selection = trim(`echo $searchableAccounts | dmenu -l 10 -i -p "Website?"`);
 if($selection == "") {
 	echo "Nothing selected.";
 	exit(1);
@@ -29,11 +29,11 @@ $account = $accountToId[$selection];
 
 switch($argv[1]) {
 	case "username":
-		`lpass show $account --username -c`;
+		`lpass show $account --username -c > tty`;
 		`notify-send "rofiLastpass" "Username for $selection copied to clipboard"`;
 		break;
 	case "password":
-		`lpass show $account --password -c`;
+		`lpass show $account --password -c > tty`;
 		`notify-send "rofiLastpass" "Password for $selection copied to clipboard"`;
 	break;
 }
