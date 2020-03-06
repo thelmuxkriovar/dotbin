@@ -6,9 +6,17 @@ fi
 if [[ "$file" == ":q" ]]; then
 	exit 1
 fi
-if ! [ -f "$HOME/.bin/$file" ]; then
-	touch "$HOME/.bin/$file"
-	chmod +x "$HOME/.bin/$file"
+if [[ $file == "$HOME/.bin/"* ]] || [[ $file == "~/.bin/"* ]] ;
+then
+	if ! [ -f $file ]; then
+		touch $file
+		chmod +x $file
+	fi
+else
+	if ! [ -f "$HOME/.bin/$file" ]; then
+		touch "$HOME/.bin/$file"
+		chmod +x "$HOME/.bin/$file"
+	fi
 fi
 cd "$HOME/.bin";
 nvim $file > `tty`;
