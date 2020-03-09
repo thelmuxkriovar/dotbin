@@ -52,13 +52,17 @@ while(true) {
 		$availWidth = $width - ($longestMountPoint + 17);
 		$filled = round(($availWidth * $percentage) / 100);
 		$bar = progressBarStr($percentage / 100, $availWidth);
-		$format  = "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s Used: %7s";
+		$percentageCentered = sprintf("%8.6f%%", $percentage);
+		$percentageCentered = str_pad($percentageCentered, $width, " ", STR_PAD_BOTH);
+		$format  = "\e[K\e[1m\e[%d;1H %s";
+		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s Used: %7s";
+		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s Free: %7s";
 		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s Total: %6s";
-		$format .= "\e[K\e[1m\e[%d;1H %".($longestMountPoint).".s %s (%10.6f%%)";
-		echo sprintf($format, 
-			($id * 4) + 2, "", $bar, toBytes($disk['used']),
-			($id * 4) + 3, $disk["mountpoint"], $bar, toBytes($disk['total']),
-			($id * 4) + 4, "", $bar, $percentage,
+		echo sprintf($format,
+			($id * 5) + 2, $percentageCentered, 
+			($id * 5) + 3, "", $bar, toBytes($disk['used']),
+			($id * 5) + 4, $disk["mountpoint"], $bar, toBytes($disk['total'] - $disk['used']),
+			($id * 5) + 5, "", $bar, toBytes($disk['total']),
 		);
 	}
 }
