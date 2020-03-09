@@ -14,7 +14,7 @@ foreach($accounts as $account) {
 	$searchableAccounts .= $search."\n";
 }
 $searchableAccounts = escapeshellarg($searchableAccounts);
-$selection = trim(`echo $searchableAccounts | dmenu -l 10 -i -p "Website?"`);
+$selection = trim(`echo $searchableAccounts | dmenu -w $currentWindowId -l 10 -i -p "Website?"`);
 if($selection == "") {
 	echo "Nothing selected.";
 	exit(1);
@@ -26,14 +26,15 @@ if(!isset($accountToId[$selection])) {
 }
 
 $account = $accountToId[$selection];
+$tty = `tty`;
 
 switch($argv[1]) {
 	case "username":
-		`lpass show $account --username -c > tty`;
+		`lpass show $account --username -c > $tty`;
 		`notify-send "rofiLastpass" "Username for $selection copied to clipboard"`;
 		break;
 	case "password":
-		`lpass show $account --password -c > tty`;
+		`lpass show $account --password -c > $tty`;
 		`notify-send "rofiLastpass" "Password for $selection copied to clipboard"`;
 	break;
 }
