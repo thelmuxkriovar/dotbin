@@ -1,0 +1,24 @@
+#!/bin/zsh
+rxfile="${XDG_CACHE_HOME:-$HOME/.cache}/rxlog"
+txfile="${XDG_CACHE_HOME:-$HOME/.cache}/txlog"
+
+rxcurrent="$(cat /sys/class/net/*/statistics/rx_bytes | paste -sd '+' | bc)"
+txcurrent="$(cat /sys/class/net/*/statistics/tx_bytes | paste -sd '+' | bc)"
+
+bytes() {
+	bytes=$1
+	[[ $bytes -lt 1024 ]] && echo "${bytes}B"
+	[[ $bytes -gt 1024 ]] && [[ $bytes -lt 1048576 ]] && echo "$(((bytes + 1023)/1024))KiB"
+	[[ $bytes -gt 1048576 ]] && echo "$(((bytes + 1048575)/1048576))MiB"
+}
+
+rxshow=$(printf -- "%s-%s\\n" "$rxcurrent" "$(cat "$rxfile")" | bc)
+rxshow=$(bytes $rxshow)
+txshow=$(printf -- "%s-%s\\n" "$txcurrent" "$(cat "$txfile")" | bc)
+txshow=$(bytes $txshow)
+
+echo "🔻$rxshow 🔺$txshow"
+
+# Log the current values for next run.
+echo "$rxcurrent" > "$rxfile"
+echo "$txcurrent" > "$txfile"

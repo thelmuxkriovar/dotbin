@@ -1,7 +1,6 @@
 #!/bin/sh
-
-selectedPage=$(find /usr/share/man/man*/ | grep .gz | sed 's#/usr/share/man/man./##' | sed 's#...gz##' | sed 's#\.$##' | sort | uniq | rofi -dmenu -i -p "Page Name")
+selectedPage=$(apropos . | dmenu -l 30 -i -p "Page Name" | awk '{ print $1 }')
 tmpFile=$(mktemp --suffix ".pdf")
 [[ $selectedPage == "" ]] && exit 1
-man -Tpdf $selectedPage >> $tmpFile
+man -t $selectedPage | ps2pdf - $tmpFile
 zathura $tmpFile --fork

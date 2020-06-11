@@ -1,9 +1,9 @@
 #!/bin/php
 <?php
 date_default_timezone_set("Europe/Rome");
-$discord = `pgrep -x "Discord"`;
+$discord = `pgrep -x "DiscordPTB"`;
 if($discord == "" && $discord == null) {
-	proc_close(proc_open('flatpak run com.discordapp.Discord &', [], $__));
+	proc_close(proc_open('discord-ptb &', [], $__));
 	sleep(2);
 }
 $hour = DateTime::createFromFormat("H:i:s a", date("H:i:s a"));

@@ -1,6 +1,6 @@
 #!/bin/zsh
 screenshotPath="$HOME/Pictures/Screenshot-"$(date +"%FT%T%z")".png"
-slop=$(slop -r wiggle,crosshair -b 2)
+slop=$(slop -r crosshair -b 1)
 read -r selection < <(echo $slop)
 maim --geometry $selection "$screenshotPath"
 xclip -selection clipboard -t image/png -i "$screenshotPath"

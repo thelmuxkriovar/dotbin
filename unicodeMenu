@@ -3,8 +3,8 @@
 
 xclip -h 2>/dev/null || exit 1
 
-window=$(xdotool getwindowfocus)
-chosen=$(cut -d ';' -f1 ~/.config/emoji | dmenu -w $window -i -l 20 | sed "s/ .*//")
+# window=$(xdotool getwindowfocus)
+chosen=$(cut -d ';' -f1 ~/.config/emoji | dmenu -i -l 30 | sed "s/ .*//")
 
 [ "$chosen" != "" ] || exit
 

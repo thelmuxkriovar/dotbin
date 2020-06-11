@@ -1,0 +1,13 @@
+#!/bin/zsh
+pid=$(pgrep -f "ffmpeg -f x11grab") && {
+	fullCommand=$(ps -p $pid -o cmd=)
+	fileName=( ${fullCommand##* } )
+	notify-send "Record Video" "<b>Stopped Recording video</b>\nfile:\t<i>$fileName</i>"
+	kill $pid
+	exit 0
+}
+recordPath="$HOME/Videos/ScreenRecording-"$(date +"%FT%T%z")".mp4"
+IFS=+ read -r size x y < <(slop -r crosshair -b 1)
+[[ "$size$x$y" == "" ]] && exit 1
+notify-send  "Record Video" "<b>Started Recording video</b>\nfile:\t<i>$recordPath</i>\nsize:\t<i>$size</i>\ncoords:\t<i>${x}x${y}</i>"
+ffmpeg -f x11grab -r 60 -s "$size" -i ":0.0+$x,$y" -f pulse -ac 2 -i default "$recordPath"
